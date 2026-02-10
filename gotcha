@@ -1,0 +1,855 @@
+-- zen - Menu Gotcha.exe style
+-- Design EXACT, features fonctionnelles + Minimize + Mobile optimisé
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Supprime ancien menu
+if playerGui:FindFirstChild("ZenMenu") then
+    playerGui:FindFirstChild("ZenMenu"):Destroy()
+end
+
+print("========================================")
+print("✨ zen - Chargement...")
+print("========================================")
+
+-- ========== DETECTION MOBILE ==========
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- ========== VARIABLES FEATURES ==========
+local hitboxEnabled = false
+local hitboxSize = 20
+local noAnimationEnabled = false
+local autoClickEnabled = false
+local autoXAfterSoruEnabled = false
+local hitboxParts = {}
+local playerConnections = {}
+local autoClickConnection = nil
+local animationConnection = nil
+local hasPortalEquipped = false
+local portalCheckConnection = nil
+local portalRemote = nil
+local portalCooldown = 18.75 -- CHANGÉ: 20 → 18.75
+local soruCooldown = 15 -- NOUVEAU: Cooldown Soru
+local lastPortalUse = 0
+local lastSoruUse = 0 -- NOUVEAU
+local portalReactionSpeed = 0.1 -- NOUVEAU: Délai après Soru (ajustable)
+
+-- ========== COULEURS (EXACT GOTCHA.EXE) ==========
+local C = {
+    bg = Color3.fromRGB(26, 26, 30),
+    menuBg = Color3.fromRGB(30, 30, 34),
+    sidebar = Color3.fromRGB(28, 28, 32),
+    border = Color3.fromRGB(42, 42, 42),
+    red = Color3.fromRGB(255, 0, 0),
+    redLight = Color3.fromRGB(255, 26, 26),
+    redDark = Color3.fromRGB(204, 51, 51),
+    redText = Color3.fromRGB(255, 51, 51),
+    white = Color3.fromRGB(224, 224, 224),
+    gray = Color3.fromRGB(136, 136, 136),
+    grayDark = Color3.fromRGB(102, 102, 102),
+    grayLight = Color3.fromRGB(119, 119, 119),
+    boldText = Color3.fromRGB(208, 208, 208),
+    sliderBg = Color3.fromRGB(51, 51, 51),
+    hitboxBg = Color3.fromRGB(42, 42, 42),
+    panelBg = Color3.fromRGB(30, 30, 30),
+    cyan = Color3.fromRGB(0, 229, 255),
+    checkOff = Color3.fromRGB(68, 68, 68),
+    footerText = Color3.fromRGB(85, 85, 85),
+}
+
+-- ========== TAILLES ADAPTATIVES ==========
+local menuWidth = isMobile and 600 or 820
+local menuHeight = isMobile and 400 or 540
+local sidebarWidth = isMobile and 160 or 200
+local textSizeMultiplier = isMobile and 1.2 or 1
+
+-- ========== SCREENGUI ==========
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ZenMenu"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
+
+-- ========== MENU PRINCIPAL ==========
+local menuFrame = Instance.new("Frame")
+menuFrame.Name = "Menu"
+menuFrame.Size = UDim2.new(0, menuWidth, 0, menuHeight)
+menuFrame.Position = UDim2.new(0.5, -menuWidth/2, 0.5, -menuHeight/2)
+menuFrame.BackgroundColor3 = C.menuBg
+menuFrame.BorderSizePixel = 0
+menuFrame.Parent = screenGui
+menuFrame.Active = true
+menuFrame.Draggable = true
+menuFrame.ZIndex = 10  -- ZIndex modéré pour le menu
+
+Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0, 8)
+Instance.new("UIStroke", menuFrame).Color = C.border
+menuFrame:FindFirstChildOfClass("UIStroke").Thickness = 1
+
+-- ========== BOUTON MINIMIZE (-) ==========
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+minimizeBtn.Position = UDim2.new(1, -40, 0, 8)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 44)
+minimizeBtn.Text = "−"
+minimizeBtn.TextColor3 = C.white
+minimizeBtn.TextSize = 20
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.Parent = menuFrame
+
+Instance.new("UICorner", minimizeBtn).CornerRadius = UDim.new(0, 6)
+
+-- ========== PETIT CARRÉ MINIMISÉ ==========
+-- CHANGÉ: Position sur le côté droit (en haut) au lieu du centre
+local miniSquare = Instance.new("Frame")
+miniSquare.Name = "MiniSquare"
+miniSquare.Size = UDim2.new(0, 60, 0, 60)
+miniSquare.Position = UDim2.new(1, -70, 0, 20)  -- ← CHANGÉ: Côté droit, en haut
+miniSquare.BackgroundColor3 = C.menuBg
+miniSquare.BorderSizePixel = 0
+miniSquare.Visible = false
+miniSquare.Active = true
+miniSquare.Draggable = true
+miniSquare.ZIndex = 100  -- ZIndex élevé pour être au-dessus
+miniSquare.Parent = screenGui
+
+Instance.new("UICorner", miniSquare).CornerRadius = UDim.new(0, 8)
+Instance.new("UIStroke", miniSquare).Color = C.border
+miniSquare:FindFirstChildOfClass("UIStroke").Thickness = 1
+
+-- Image dans le carré (À REMPLACER)
+local miniImage = Instance.new("ImageLabel")
+miniImage.Size = UDim2.new(1, 0, 1, 0)  -- Prend tout l'espace
+miniImage.Position = UDim2.new(0, 0, 0, 0)
+miniImage.BackgroundTransparency = 1
+miniImage.Image = "rbxassetid://0" -- ⬅️ METTRE TON IMAGE ICI
+miniImage.ScaleType = Enum.ScaleType.Fit
+miniImage.ZIndex = 1  -- ZIndex bas pour ne pas bloquer
+miniImage.Parent = miniSquare
+
+-- Bouton pour agrandir
+local expandBtn = Instance.new("TextButton")
+expandBtn.Size = UDim2.new(1, 0, 1, 0)
+expandBtn.BackgroundTransparency = 1
+expandBtn.Text = ""
+expandBtn.ZIndex = 2  -- ZIndex moyen
+expandBtn.Modal = false  -- Important: permet les clics sur le frame parent
+expandBtn.Parent = miniSquare
+
+-- ========== TOGGLE MINIMIZE ==========
+local isMinimized = false
+
+minimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    
+    if isMinimized then
+        menuFrame.Visible = false
+        miniSquare.Visible = true
+    else
+        menuFrame.Visible = true
+        miniSquare.Visible = false
+    end
+end)
+
+expandBtn.MouseButton1Click:Connect(function()
+    isMinimized = false
+    menuFrame.Visible = true
+    miniSquare.Visible = false
+end)
+
+-- Debug: Vérifier que le carré reçoit les clics
+expandBtn.MouseButton1Down:Connect(function()
+    print("✅ Clic sur le carré détecté!")
+end)
+
+miniSquare.DragBegin:Connect(function()
+    print("✅ Début du déplacement du carré!")
+end)
+
+-- ========== SIDEBAR ==========
+local sidebar = Instance.new("Frame")
+sidebar.Name = "Sidebar"
+sidebar.Size = UDim2.new(0, sidebarWidth, 1, 0)
+sidebar.BackgroundColor3 = Color3.fromRGB(26, 26, 30)
+sidebar.BorderSizePixel = 0
+sidebar.Parent = menuFrame
+
+Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 8)
+
+local sidebarBorder = Instance.new("Frame")
+sidebarBorder.Size = UDim2.new(0, 1, 1, 0)
+sidebarBorder.Position = UDim2.new(1, -1, 0, 0)
+sidebarBorder.BackgroundColor3 = C.border
+sidebarBorder.BorderSizePixel = 0
+sidebarBorder.Parent = sidebar
+
+-- Logo "zen"
+local logo = Instance.new("TextLabel")
+logo.Size = UDim2.new(1, 0, 0, 50)
+logo.Position = UDim2.new(0, 16, 0, 8)
+logo.BackgroundTransparency = 1
+logo.Text = "zen"
+logo.TextColor3 = C.redLight
+logo.TextSize = 20 * textSizeMultiplier
+logo.Font = Enum.Font.GothamBold
+logo.TextXAlignment = Enum.TextXAlignment.Left
+logo.Parent = sidebar
+
+-- Fonction section title
+local function createSectionTitle(parent, text, yPos)
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -16, 0, 20)
+    title.Position = UDim2.new(0, 16, 0, yPos)
+    title.BackgroundTransparency = 1
+    title.Text = string.upper(text)
+    title.TextColor3 = C.redDark
+    title.TextSize = 11 * textSizeMultiplier
+    title.Font = Enum.Font.GothamMedium
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = parent
+end
+
+-- Fonction nav item
+local function createNavItem(parent, text, yPos, active)
+    local item = Instance.new("Frame")
+    item.Size = UDim2.new(1, -16, 0, 28)
+    item.Position = UDim2.new(0, 8, 0, yPos)
+    item.BackgroundTransparency = 1
+    item.Parent = parent
+
+    if active then
+        local bar = Instance.new("Frame")
+        bar.Size = UDim2.new(0, 2, 0, 20)
+        bar.Position = UDim2.new(0, 0, 0.5, -10)
+        bar.BackgroundColor3 = C.red
+        bar.BorderSizePixel = 0
+        bar.Parent = item
+        Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 1)
+
+        local dot = Instance.new("TextLabel")
+        dot.Size = UDim2.new(0, 10, 0, 10)
+        dot.Position = UDim2.new(0, 4, 0, 0)
+        dot.BackgroundTransparency = 1
+        dot.Text = "*"
+        dot.TextColor3 = C.red
+        dot.TextSize = 8 * textSizeMultiplier
+        dot.Font = Enum.Font.GothamBold
+        dot.Parent = item
+    end
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -20, 1, 0)
+    label.Position = UDim2.new(0, 20, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = active and C.redText or C.gray
+    label.TextSize = 14 * textSizeMultiplier
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = item
+end
+
+-- Navigation
+createSectionTitle(sidebar, "Player", 60)
+createNavItem(sidebar, "Main", 82, true)
+createNavItem(sidebar, "Player", 110, false)
+
+createSectionTitle(sidebar, "Visuals", 150)
+createNavItem(sidebar, "Players", 172, false)
+
+-- ========== MAIN CONTENT ==========
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.new(1, -sidebarWidth, 1, 0)
+main.Position = UDim2.new(0, sidebarWidth, 0, 0)
+main.BackgroundTransparency = 1
+main.Parent = menuFrame
+
+-- Header
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 40)
+header.BackgroundTransparency = 1
+header.Parent = main
+
+local headerText = Instance.new("TextLabel")
+headerText.Size = UDim2.new(1, 0, 1, 0)
+headerText.Position = UDim2.new(0, 24, 0, 0)
+headerText.BackgroundTransparency = 1
+headerText.Text = "Main"
+headerText.TextColor3 = C.grayDark
+headerText.TextSize = 14 * textSizeMultiplier
+headerText.Font = Enum.Font.Gotham
+headerText.TextXAlignment = Enum.TextXAlignment.Left
+headerText.Parent = header
+
+local headerLine = Instance.new("Frame")
+headerLine.Size = UDim2.new(1, 0, 0, 1)
+headerLine.Position = UDim2.new(0, 0, 1, -1)
+headerLine.BackgroundColor3 = C.border
+headerLine.BorderSizePixel = 0
+headerLine.Parent = header
+
+-- Footer
+local footer = Instance.new("Frame")
+footer.Size = UDim2.new(1, 0, 0, 30)
+footer.Position = UDim2.new(0, 0, 1, -30)
+footer.BackgroundTransparency = 1
+footer.Parent = main
+
+local footerLine = Instance.new("Frame")
+footerLine.Size = UDim2.new(1, 0, 0, 1)
+footerLine.BackgroundColor3 = C.border
+footerLine.BorderSizePixel = 0
+footerLine.Parent = footer
+
+local footerText = Instance.new("TextLabel")
+footerText.Size = UDim2.new(1, 0, 1, 0)
+footerText.BackgroundTransparency = 1
+footerText.Text = "zen [beta] for Blox Fruits"
+footerText.TextColor3 = C.footerText
+footerText.TextSize = 10 * textSizeMultiplier
+footerText.Font = Enum.Font.Gotham
+footerText.Parent = footer
+
+-- Content scrollable
+local contentArea = Instance.new("ScrollingFrame")
+contentArea.Name = "Content"
+contentArea.Size = UDim2.new(1, 0, 1, -70)
+contentArea.Position = UDim2.new(0, 0, 0, 40)
+contentArea.BackgroundTransparency = 1
+contentArea.BorderSizePixel = 0
+contentArea.ScrollBarThickness = 4
+contentArea.ScrollBarImageColor3 = Color3.fromRGB(51, 51, 51)
+contentArea.CanvasSize = UDim2.new(0, 0, 0, 600)
+contentArea.Parent = main
+
+-- ========== FONCTIONS PANELS ==========
+
+local function createToggle(parent, pos, callback)
+    local toggle = Instance.new("Frame")
+    toggle.Size = UDim2.new(0, 38, 0, 20)
+    toggle.Position = pos
+    toggle.BackgroundColor3 = C.gray
+    toggle.BorderSizePixel = 0
+    toggle.Parent = parent
+
+    Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 10)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.Position = UDim2.new(0, 2, 0, 2)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    knob.Parent = toggle
+
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 8)
+
+    local isOn = false
+    
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = ""
+    btn.Parent = toggle
+    
+    btn.MouseButton1Click:Connect(function()
+        isOn = not isOn
+        
+        if isOn then
+            toggle.BackgroundColor3 = C.red
+            knob.Position = UDim2.new(0, 20, 0, 2)
+        else
+            toggle.BackgroundColor3 = C.gray
+            knob.Position = UDim2.new(0, 2, 0, 2)
+        end
+        
+        if callback then callback(isOn) end
+    end)
+
+    return toggle, btn
+end
+
+local function createSlider(parent, pos, value, maxVal, callback)
+    local sliderBg = Instance.new("Frame")
+    sliderBg.Size = UDim2.new(0, 120, 0, 4)
+    sliderBg.Position = pos
+    sliderBg.BackgroundColor3 = C.sliderBg
+    sliderBg.BorderSizePixel = 0
+    sliderBg.Parent = parent
+
+    Instance.new("UICorner", sliderBg).CornerRadius = UDim.new(0, 2)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(value / maxVal, 0, 1, 0)
+    fill.BackgroundColor3 = C.red
+    fill.BorderSizePixel = 0
+    fill.Parent = sliderBg
+
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 2)
+    
+    local dragging = false
+    
+    sliderBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+        end
+    end)
+    
+    sliderBg.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local relativePos = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+            fill.Size = UDim2.new(relativePos, 0, 1, 0)
+            if callback then callback(relativePos * maxVal) end
+        end
+    end)
+    
+    return sliderBg, fill
+end
+
+-- Fonction panel complet
+local function createPanel(parent, title, xPos, yPos, rows, onToggle)
+    local panelWidth = isMobile and 260 or 290
+    local headerHeight = 36
+    local rowHeight = 22
+    local panelHeight = headerHeight + 16 + (#rows * rowHeight)
+
+    local panel = Instance.new("Frame")
+    panel.Size = UDim2.new(0, panelWidth, 0, panelHeight)
+    panel.Position = UDim2.new(0, xPos, 0, yPos)
+    panel.BackgroundColor3 = C.panelBg
+    panel.BorderSizePixel = 0
+    panel.Parent = parent
+
+    Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 6)
+    Instance.new("UIStroke", panel).Color = C.border
+    panel:FindFirstChildOfClass("UIStroke").Thickness = 1
+
+    -- Header
+    local panelHeader = Instance.new("Frame")
+    panelHeader.Size = UDim2.new(1, 0, 0, headerHeight)
+    panelHeader.BackgroundTransparency = 1
+    panelHeader.Parent = panel
+
+    local panelIcon = Instance.new("TextLabel")
+    panelIcon.Size = UDim2.new(0, 16, 0, 16)
+    panelIcon.Position = UDim2.new(0, 12, 0.5, -8)
+    panelIcon.BackgroundTransparency = 1
+    panelIcon.Text = "*"
+    panelIcon.TextColor3 = C.red
+    panelIcon.TextSize = 14 * textSizeMultiplier
+    panelIcon.Font = Enum.Font.GothamBold
+    panelIcon.Parent = panelHeader
+
+    local panelTitle = Instance.new("TextLabel")
+    panelTitle.Size = UDim2.new(0, 150, 1, 0)
+    panelTitle.Position = UDim2.new(0, 30, 0, 0)
+    panelTitle.BackgroundTransparency = 1
+    panelTitle.Text = title
+    panelTitle.TextColor3 = C.white
+    panelTitle.TextSize = 14 * textSizeMultiplier
+    panelTitle.Font = Enum.Font.GothamSemibold
+    panelTitle.TextXAlignment = Enum.TextXAlignment.Left
+    panelTitle.Parent = panelHeader
+
+    createToggle(panelHeader, UDim2.new(1, -50, 0.5, -10), onToggle)
+
+    local headerSep = Instance.new("Frame")
+    headerSep.Size = UDim2.new(1, 0, 0, 1)
+    headerSep.Position = UDim2.new(0, 0, 1, -1)
+    headerSep.BackgroundColor3 = C.border
+    headerSep.BorderSizePixel = 0
+    headerSep.Parent = panelHeader
+
+    -- Rows
+    for i, row in ipairs(rows) do
+        local yOffset = headerHeight + 8 + ((i - 1) * rowHeight)
+
+        local rowLabel = Instance.new("TextLabel")
+        rowLabel.Size = UDim2.new(0, 160, 0, rowHeight)
+        rowLabel.Position = UDim2.new(0, 16, 0, yOffset)
+        rowLabel.BackgroundTransparency = 1
+        rowLabel.Text = row.label
+        rowLabel.TextColor3 = C.grayLight
+        rowLabel.TextSize = 12 * textSizeMultiplier
+        rowLabel.Font = Enum.Font.Gotham
+        rowLabel.TextXAlignment = Enum.TextXAlignment.Left
+        rowLabel.Parent = panel
+
+        if row.type == "slider" then
+            createSlider(panel, UDim2.new(1, -136, 0, yOffset + 9), row.value, row.max or 100, row.callback)
+        elseif row.type == "status" then
+            row.labelObj = rowLabel
+        end
+    end
+
+    return panel
+end
+
+-- ========== FEATURES BACKEND ==========
+
+local function createInvisibleHitbox(character)
+    if not character then return false end
+    
+    local hrp = character:WaitForChild("HumanoidRootPart", 5)
+    if not hrp then return false end
+    
+    if hitboxParts[character] then
+        pcall(function() hitboxParts[character]:Destroy() end)
+    end
+    
+    local hitboxPart = Instance.new("Part")
+    hitboxPart.Name = "ExpandedHitbox"
+    hitboxPart.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+    hitboxPart.CFrame = hrp.CFrame
+    hitboxPart.Transparency = 1
+    hitboxPart.CanCollide = false
+    hitboxPart.Anchored = false
+    hitboxPart.Massless = true
+    hitboxPart.CastShadow = false
+    
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = hrp
+    weld.Part1 = hitboxPart
+    weld.Parent = hitboxPart
+    
+    hitboxPart.Parent = character
+    hitboxParts[character] = hitboxPart
+    
+    return true
+end
+
+local function removeHitbox(character)
+    if hitboxParts[character] then
+        pcall(function() hitboxParts[character]:Destroy() end)
+        hitboxParts[character] = nil
+    end
+end
+
+local function setupPlayer(otherPlayer)
+    if otherPlayer == player then return end
+    
+    if playerConnections[otherPlayer] then
+        for _, conn in pairs(playerConnections[otherPlayer]) do
+            pcall(function() conn:Disconnect() end)
+        end
+    end
+    
+    playerConnections[otherPlayer] = {}
+    
+    local function onCharacterAdded(character)
+        task.wait(1)
+        if hitboxEnabled then
+            createInvisibleHitbox(character)
+        end
+    end
+    
+    local charConn = otherPlayer.CharacterAdded:Connect(onCharacterAdded)
+    table.insert(playerConnections[otherPlayer], charConn)
+    
+    if otherPlayer.Character then
+        task.spawn(function() onCharacterAdded(otherPlayer.Character) end)
+    end
+end
+
+local function disableAllAnimations()
+    if animationConnection then
+        animationConnection:Disconnect()
+    end
+    
+    animationConnection = RunService.Heartbeat:Connect(function()
+        if not noAnimationEnabled or not player.Character then return end
+        
+        pcall(function()
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if not humanoid then return end
+            
+            local animator = humanoid:FindFirstChildOfClass("Animator")
+            if animator then
+                for _, track in pairs(animator:GetPlayingAnimationTracks()) do
+                    track:Stop()
+                    track:Destroy()
+                end
+            end
+            
+            local animate = player.Character:FindFirstChild("Animate")
+            if animate then
+                animate:Destroy()
+            end
+        end)
+    end)
+end
+
+local function hasSwordEquipped()
+    if not player.Character then return false end
+    
+    for _, tool in pairs(player.Character:GetChildren()) do
+        if tool:IsA("Tool") then
+            local name = tool.Name:lower()
+            if name:find("sword") or name:find("katana") or name:find("blade") or name:find("cutlass") then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function startAutoClick()
+    if autoClickConnection then
+        autoClickConnection:Disconnect()
+    end
+    
+    autoClickConnection = RunService.Heartbeat:Connect(function()
+        if not autoClickEnabled then return end
+        
+        if hasSwordEquipped() then
+            pcall(function()
+                local vim = game:GetService("VirtualInputManager")
+                vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                task.wait(0.01)
+                vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            end)
+            task.wait(0.1)
+        end
+    end)
+end
+
+local function checkPortalEquipped()
+    if not player.Character then return false end
+    
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:lower():find("portal") then
+                return true
+            end
+        end
+    end
+    
+    for _, tool in pairs(player.Character:GetChildren()) do
+        if tool:IsA("Tool") and tool.Name:lower():find("portal") then
+            return true
+        end
+    end
+    
+    return false
+end
+
+local function startPortalCheck()
+    if portalCheckConnection then
+        portalCheckConnection:Disconnect()
+    end
+    
+    portalCheckConnection = RunService.Heartbeat:Connect(function()
+        hasPortalEquipped = checkPortalEquipped()
+    end)
+end
+
+local function callPortalX()
+    if not portalRemote then
+        return false
+    end
+    
+    local timeLeft = portalCooldown - (tick() - lastPortalUse)
+    if timeLeft > 0 then
+        return false
+    end
+    
+    pcall(function()
+        if portalRemote.ClassName == "RemoteEvent" then
+            portalRemote:FireServer("X")
+        else
+            portalRemote:InvokeServer("X")
+        end
+        lastPortalUse = tick()
+    end)
+    
+    return true
+end
+
+-- MASTER HOOK (AVEC COOLDOWN SORU)
+local function installMasterHook()
+    local CommE = nil
+    pcall(function()
+        CommE = ReplicatedStorage:WaitForChild("Remotes", 5):WaitForChild("CommE", 5)
+    end)
+    
+    if not CommE then return false end
+    
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        
+        -- CAPTURER REMOTE
+        if (method == "FireServer" or method == "InvokeServer") and type(args[1]) == "string" then
+            if args[1] == "X" or args[1] == "Z" or args[1] == "C" then
+                if not portalRemote then
+                    portalRemote = self
+                end
+                
+                if args[1] == "X" then
+                    lastPortalUse = tick()
+                end
+            end
+        end
+        
+        -- DÉTECTER SORU (AVEC COOLDOWN 15S)
+        if self == CommE and method == "FireServer" and args[1] == "Soru" then
+            local soruTimeLeft = soruCooldown - (tick() - lastSoruUse)
+            
+            if autoXAfterSoruEnabled and soruTimeLeft <= 0 and hasPortalEquipped then
+                lastSoruUse = tick()
+                
+                task.spawn(function()
+                    wait(portalReactionSpeed) -- AJUSTABLE
+                    callPortalX()
+                end)
+            end
+        end
+        
+        return oldNamecall(self, ...)
+    end)
+    
+    setreadonly(mt, true)
+    
+    return true
+end
+
+-- ========== CREATION DES PANELS ==========
+
+-- Panel 1: Hitbox Expander
+createPanel(contentArea, "Hitbox Expander", 16, 8, {
+    { label = "Hitbox Size", type = "slider", value = 20, max = 45, callback = function(value)
+        hitboxSize = math.floor(value + 5)
+        if hitboxEnabled then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= player and p.Character then
+                    createInvisibleHitbox(p.Character)
+                end
+            end
+        end
+    end },
+}, function(state)
+    hitboxEnabled = state
+    
+    if state then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= player and p.Character then
+                createInvisibleHitbox(p.Character)
+            end
+        end
+    else
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= player then
+                removeHitbox(p.Character)
+            end
+        end
+    end
+end)
+
+-- Panel 2: No Animation
+createPanel(contentArea, "No Animation", isMobile and 16 or 318, isMobile and 100 or 8, {
+}, function(state)
+    noAnimationEnabled = state
+    
+    if state then
+        disableAllAnimations()
+    else
+        if animationConnection then
+            animationConnection:Disconnect()
+            animationConnection = nil
+        end
+    end
+end)
+
+-- Panel 3: Auto-Click
+createPanel(contentArea, "Auto-Click Sword", 16, isMobile and 180 or 150, {
+}, function(state)
+    autoClickEnabled = state
+    
+    if state then
+        startAutoClick()
+    else
+        if autoClickConnection then
+            autoClickConnection:Disconnect()
+            autoClickConnection = nil
+        end
+    end
+end)
+
+-- Panel 4: Auto Portal-X (AVEC SLIDER VITESSE)
+local portalPanel = createPanel(contentArea, "Auto Portal-X", isMobile and 16 or 318, isMobile and 260 or 106, {
+    { label = "Reaction Speed", type = "slider", value = 0.1, max = 0.5, callback = function(value)
+        portalReactionSpeed = math.floor(value * 100) / 100
+    end },
+    { label = "Status", type = "status" },
+}, function(state)
+    autoXAfterSoruEnabled = state
+    
+    if state then
+        startPortalCheck()
+        installMasterHook()
+    else
+        if portalCheckConnection then
+            portalCheckConnection:Disconnect()
+        end
+    end
+end)
+
+-- Update Portal Status
+RunService.Heartbeat:Connect(function()
+    if autoXAfterSoruEnabled then
+        local portalTimeLeft = portalCooldown - (tick() - lastPortalUse)
+        local soruTimeLeft = soruCooldown - (tick() - lastSoruUse)
+        
+        local statusText = ""
+        if portalRemote then
+            if portalTimeLeft > 0 then
+                statusText = string.format("X CD: %.1fs", portalTimeLeft)
+            elseif soruTimeLeft > 0 then
+                statusText = string.format("Soru CD: %.1fs", soruTimeLeft)
+            else
+                statusText = "Ready!"
+            end
+        elseif hasPortalEquipped then
+            statusText = "Use X once"
+        else
+            statusText = "Equip Portal"
+        end
+        
+        for _, obj in pairs(portalPanel:GetDescendants()) do
+            if obj:IsA("TextLabel") and obj.Text == "Status" then
+                obj.Text = statusText
+                break
+            end
+        end
+    end
+end)
+
+-- Init joueurs
+for _, p in pairs(Players:GetPlayers()) do
+    setupPlayer(p)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+
+print("========================================")
+print("✅ zen chargé!")
+print("📱 Mode:", isMobile and "MOBILE" or "PC")
+print("📍 Carré minimisé: Côté droit en haut")
+print("========================================")
