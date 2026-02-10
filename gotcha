@@ -1,21 +1,54 @@
 -- zen - Menu Gotcha.exe style
--- Version FINALE avec minimisation
+-- Version FINALE avec minimisation + FIX GUI
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-
--- Supprime ancien menu
-if playerGui:FindFirstChild("ZenMenu") then
-    playerGui:FindFirstChild("ZenMenu"):Destroy()
-end
 
 print("========================================")
 print("✨ zen - Chargement...")
 print("========================================")
+
+-- ========== GUI PARENT (FIX) ==========
+local guiParent = nil
+
+-- Essayer CoreGui d'abord
+pcall(function()
+    local CoreGui = game:GetService("CoreGui")
+    if CoreGui:FindFirstChild("ZenMenu") then
+        CoreGui:FindFirstChild("ZenMenu"):Destroy()
+    end
+    guiParent = CoreGui
+    print("✅ GUI Parent: CoreGui")
+end)
+
+-- Si CoreGui échoue, essayer gethui()
+if not guiParent and gethui then
+    pcall(function()
+        guiParent = gethui()
+        print("✅ GUI Parent: gethui()")
+    end)
+end
+
+-- Sinon PlayerGui
+if not guiParent then
+    local playerGui = player:WaitForChild("PlayerGui", 5)
+    if playerGui then
+        if playerGui:FindFirstChild("ZenMenu") then
+            playerGui:FindFirstChild("ZenMenu"):Destroy()
+        end
+        guiParent = playerGui
+        print("✅ GUI Parent: PlayerGui")
+    end
+end
+
+-- Si toujours rien, arrêter
+if not guiParent then
+    warn("❌ ERREUR: Impossible de créer le GUI")
+    return
+end
 
 -- ========== VARIABLES FEATURES ==========
 local hitboxEnabled = false
@@ -30,9 +63,10 @@ local animationConnection = nil
 local hasPortalEquipped = false
 local portalCheckConnection = nil
 local portalRemote = nil
-local portalCooldown = 18.75  -- CORRIGÉ
-local soruCooldown = 15        -- CORRIGÉ
+local portalCooldown = 18.75
+local soruCooldown = 15
 local lastPortalUse = 0
+local portalReactionSpeed = 0.1
 
 -- Détection mobile
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -65,7 +99,7 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ZenMenu"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-screenGui.Parent = playerGui
+screenGui.Parent = guiParent
 
 -- Taille adaptée mobile
 local menuWidth = isMobile and 600 or 820
@@ -128,7 +162,7 @@ local minimizeBtn = Instance.new("TextButton")
 minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
 minimizeBtn.Position = UDim2.new(1, -35, 0, 10)
 minimizeBtn.BackgroundColor3 = C.red
-minimizeBtn.Text = "-"
+minimizeBtn.Text = "−"
 minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 minimizeBtn.Font = Enum.Font.GothamBold
 minimizeBtn.TextSize = isMobile and 20 or 18
@@ -262,7 +296,7 @@ contentArea.BackgroundTransparency = 1
 contentArea.BorderSizePixel = 0
 contentArea.ScrollBarThickness = isMobile and 6 or 4
 contentArea.ScrollBarImageColor3 = Color3.fromRGB(51, 51, 51)
-contentArea.CanvasSize = UDim2.new(0, 0, 0, 520)
+contentArea.CanvasSize = UDim2.new(0, 0, 0, 600)
 contentArea.Parent = main
 
 -- ========== FONCTIONS PANELS ==========
@@ -314,11 +348,11 @@ local function createToggle(parent, pos, callback)
     return toggle, btn
 end
 
-local function createSlider(parent, pos, value, callback)
+local function createSlider(parent, pos, value, maxVal, callback)
     local sliderWidth = isMobile and 150 or 120
     
     local sliderBg = Instance.new("Frame")
-    sliderBg.Size = UDim2.new(0, sliderWidth, 0, isMobile and 6 : 4)
+    sliderBg.Size = UDim2.new(0, sliderWidth, 0, isMobile and 6 or 4)
     sliderBg.Position = pos
     sliderBg.BackgroundColor3 = C.sliderBg
     sliderBg.BorderSizePixel = 0
@@ -327,7 +361,7 @@ local function createSlider(parent, pos, value, callback)
     Instance.new("UICorner", sliderBg).CornerRadius = UDim.new(0, 2)
 
     local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(value / 100, 0, 1, 0)
+    fill.Size = UDim2.new(value / maxVal, 0, 1, 0)
     fill.BackgroundColor3 = C.red
     fill.BorderSizePixel = 0
     fill.Parent = sliderBg
@@ -351,14 +385,15 @@ local function createSlider(parent, pos, value, callback)
     UserInputService.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local relativePos = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
-            local newValue = math.floor(relativePos * 100)
             fill.Size = UDim2.new(relativePos, 0, 1, 0)
-            if callback then callback(newValue) end
+            if callback then callback(relativePos * maxVal) end
         end
     end)
+    
+    return sliderBg, fill
 end
 
--- Fonction panel complet (SANS checkboxes Enable)
+-- Fonction panel complet
 local function createPanel(parent, title, xPos, yPos, rows, onToggle)
     local panelWidth = isMobile and 280 or 290
     local headerHeight = isMobile and 42 or 36
@@ -421,14 +456,14 @@ local function createPanel(parent, title, xPos, yPos, rows, onToggle)
         rowLabel.Position = UDim2.new(0, 16, 0, yOffset)
         rowLabel.BackgroundTransparency = 1
         rowLabel.Text = row.label
-        rowLabel.TextColor3 = row.bold and C.boldText or C.grayLight
+        rowLabel.TextColor3 = C.grayLight
         rowLabel.TextSize = isMobile and 14 or 12
-        rowLabel.Font = row.bold and Enum.Font.GothamMedium or Enum.Font.Gotham
+        rowLabel.Font = Enum.Font.Gotham
         rowLabel.TextXAlignment = Enum.TextXAlignment.Left
         rowLabel.Parent = panel
 
         if row.type == "slider" then
-            createSlider(panel, UDim2.new(1, isMobile and -160 or -136, 0, yOffset + (isMobile and 11 or 9)), row.value, row.callback)
+            createSlider(panel, UDim2.new(1, isMobile and -160 or -136, 0, yOffset + (isMobile and 11 or 9)), row.value, row.max or 100, row.callback)
         elseif row.type == "status" then
             row.labelObj = rowLabel
         end
@@ -623,16 +658,19 @@ local function callPortalX()
     return true
 end
 
--- MASTER HOOK
+-- MASTER HOOK (UN SEUL)
 local function installMasterHook()
     local CommE = nil
     pcall(function()
         CommE = ReplicatedStorage:WaitForChild("Remotes", 5):WaitForChild("CommE", 5)
     end)
     
-    if not CommE then return false end
+    if not CommE then 
+        print("⚠️ CommE introuvable")
+        return false 
+    end
     
-    local soruCooldownActive = false
+    local lastSoruUse = 0
     
     local mt = getrawmetatable(game)
     local oldNamecall = mt.__namecall
@@ -642,11 +680,12 @@ local function installMasterHook()
         local method = getnamecallmethod()
         local args = {...}
         
-        -- CAPTURER REMOTE
+        -- CAPTURER REMOTE PORTAL
         if (method == "FireServer" or method == "InvokeServer") and type(args[1]) == "string" then
             if args[1] == "X" or args[1] == "Z" or args[1] == "C" then
                 if not portalRemote then
                     portalRemote = self
+                    print("✅ Remote Portal capturé!")
                 end
                 
                 if args[1] == "X" then
@@ -655,18 +694,16 @@ local function installMasterHook()
             end
         end
         
-        -- DÉTECTER SORU
+        -- DÉTECTER SORU (AVEC COOLDOWN 15S)
         if self == CommE and method == "FireServer" and args[1] == "Soru" then
-            if autoXAfterSoruEnabled and not soruCooldownActive and hasPortalEquipped then
-                soruCooldownActive = true
+            local soruTimeLeft = soruCooldown - (tick() - lastSoruUse)
+            
+            if autoXAfterSoruEnabled and soruTimeLeft <= 0 and hasPortalEquipped then
+                lastSoruUse = tick()
                 
                 task.spawn(function()
-                    wait(0.1)
+                    wait(portalReactionSpeed)
                     callPortalX()
-                end)
-                
-                task.delay(soruCooldown, function()
-                    soruCooldownActive = false
                 end)
             end
         end
@@ -676,15 +713,16 @@ local function installMasterHook()
     
     setreadonly(mt, true)
     
+    print("✅ Hook installé!")
     return true
 end
 
--- ========== PANELS (SANS "Enable...") ==========
+-- ========== PANELS ==========
 
 -- Panel 1: Hitbox
 createPanel(contentArea, "Hitbox Expander", 16, 8, {
-    { label = "Hitbox Size", type = "slider", value = 20, callback = function(value)
-        hitboxSize = math.floor((value / 100) * 45 + 5)
+    { label = "Hitbox Size", type = "slider", value = 20, max = 45, callback = function(value)
+        hitboxSize = math.floor(value + 5)
         if hitboxEnabled then
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= player and p.Character then
@@ -726,7 +764,7 @@ createPanel(contentArea, "No Animation", isMobile and 16 or 318, isMobile and 90
 end)
 
 -- Panel 3: Auto-Click
-createPanel(contentArea, "Auto-Click Sword", isMobile and 16 or 16, isMobile and 160 or 150, {}, function(state)
+createPanel(contentArea, "Auto-Click Sword", 16, isMobile and 160 or 150, {}, function(state)
     autoClickEnabled = state
     
     if state then
@@ -739,8 +777,11 @@ createPanel(contentArea, "Auto-Click Sword", isMobile and 16 or 16, isMobile and
     end
 end)
 
--- Panel 4: Auto Portal-X
+-- Panel 4: Auto Portal-X (AVEC SLIDER VITESSE)
 local portalPanel = createPanel(contentArea, "Auto Portal-X", isMobile and 16 or 318, isMobile and 230 or 106, {
+    { label = "Reaction Speed", type = "slider", value = 0.1, max = 0.5, callback = function(value)
+        portalReactionSpeed = math.floor(value * 100) / 100
+    end },
     { label = "Status", type = "status" },
 }, function(state)
     autoXAfterSoruEnabled = state
@@ -758,12 +799,12 @@ end)
 -- Update Portal Status
 RunService.Heartbeat:Connect(function()
     if autoXAfterSoruEnabled then
-        local timeLeft = portalCooldown - (tick() - lastPortalUse)
+        local portalTimeLeft = portalCooldown - (tick() - lastPortalUse)
         
         local statusText = ""
         if portalRemote then
-            if timeLeft > 0 then
-                statusText = string.format("CD: %.1fs", timeLeft)
+            if portalTimeLeft > 0 then
+                statusText = string.format("CD: %.1fs", portalTimeLeft)
             else
                 statusText = "Ready!"
             end
@@ -774,7 +815,7 @@ RunService.Heartbeat:Connect(function()
         end
         
         for _, obj in pairs(portalPanel:GetDescendants()) do
-            if obj:IsA("TextLabel") and obj.Name ~= "Logo" and obj.Text:find("Status") then
+            if obj:IsA("TextLabel") and obj.Text:find("Status") then
                 obj.Text = statusText
                 break
             end
@@ -791,7 +832,6 @@ minimizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
     
     if isMinimized then
-        -- MINIMISER (petit carré)
         savedPosition = menuFrame.Position
         savedSize = menuFrame.Size
         
@@ -804,22 +844,19 @@ minimizeBtn.MouseButton1Click:Connect(function()
             true
         )
         
-        -- Cacher tout sauf logo
         sidebar.Visible = false
         main.Visible = false
         minimizeBtn.Text = "+"
         
-        -- Rendre logo visible
         logo.Visible = true
         logo.Size = UDim2.new(1, 0, 1, 0)
         logo.Position = UDim2.new(0, 0, 0, 0)
-        logo.TextSize = isMobile and 28 : 24
+        logo.TextSize = isMobile and 28 or 24
         
         minimizeBtn.Position = UDim2.new(1, -25, 0, 2)
         minimizeBtn.Size = UDim2.new(0, 20, 0, 20)
         
     else
-        -- RESTAURER
         menuFrame:TweenSizeAndPosition(
             savedSize,
             savedPosition,
@@ -833,7 +870,7 @@ minimizeBtn.MouseButton1Click:Connect(function()
         
         sidebar.Visible = true
         main.Visible = true
-        minimizeBtn.Text = "-"
+        minimizeBtn.Text = "−"
         
         logo.Size = UDim2.new(1, -40, 1, 0)
         logo.Position = UDim2.new(0, 16, 0, 0)
@@ -853,7 +890,6 @@ Players.PlayerAdded:Connect(setupPlayer)
 
 print("========================================")
 print("✅ zen chargé!")
-print("📱 Mobile: " .. tostring(isMobile))
-print("⏱️ Cooldown Portal X: 18.75s")
-print("⏱️ Cooldown Soru: 15s")
+print("📱 Mobile:", tostring(isMobile))
+print("⏱️ Portal CD: 18.75s | Soru CD: 15s")
 print("========================================")
