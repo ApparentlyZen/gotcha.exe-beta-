@@ -1,5 +1,5 @@
 -- zen - Menu Gotcha.exe style
--- Design EXACT, features fonctionnelles + Minimize + Mobile optimisé
+-- Version FINALE avec minimisation
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -17,9 +17,6 @@ print("========================================")
 print("✨ zen - Chargement...")
 print("========================================")
 
--- ========== DETECTION MOBILE ==========
-local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-
 -- ========== VARIABLES FEATURES ==========
 local hitboxEnabled = false
 local hitboxSize = 20
@@ -33,11 +30,12 @@ local animationConnection = nil
 local hasPortalEquipped = false
 local portalCheckConnection = nil
 local portalRemote = nil
-local portalCooldown = 18.75 -- CHANGÉ: 20 → 18.75
-local soruCooldown = 15 -- NOUVEAU: Cooldown Soru
+local portalCooldown = 18.75  -- CORRIGÉ
+local soruCooldown = 15        -- CORRIGÉ
 local lastPortalUse = 0
-local lastSoruUse = 0 -- NOUVEAU
-local portalReactionSpeed = 0.1 -- NOUVEAU: Délai après Soru (ajustable)
+
+-- Détection mobile
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 -- ========== COULEURS (EXACT GOTCHA.EXE) ==========
 local C = {
@@ -62,18 +60,16 @@ local C = {
     footerText = Color3.fromRGB(85, 85, 85),
 }
 
--- ========== TAILLES ADAPTATIVES ==========
-local menuWidth = isMobile and 600 or 820
-local menuHeight = isMobile and 400 or 540
-local sidebarWidth = isMobile and 160 or 200
-local textSizeMultiplier = isMobile and 1.2 or 1
-
 -- ========== SCREENGUI ==========
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ZenMenu"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = playerGui
+
+-- Taille adaptée mobile
+local menuWidth = isMobile and 600 or 820
+local menuHeight = isMobile and 400 or 540
 
 -- ========== MENU PRINCIPAL ==========
 local menuFrame = Instance.new("Frame")
@@ -85,94 +81,14 @@ menuFrame.BorderSizePixel = 0
 menuFrame.Parent = screenGui
 menuFrame.Active = true
 menuFrame.Draggable = true
-menuFrame.ZIndex = 10  -- ZIndex modéré pour le menu
 
 Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0, 8)
 Instance.new("UIStroke", menuFrame).Color = C.border
 menuFrame:FindFirstChildOfClass("UIStroke").Thickness = 1
 
--- ========== BOUTON MINIMIZE (-) ==========
-local minimizeBtn = Instance.new("TextButton")
-minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
-minimizeBtn.Position = UDim2.new(1, -40, 0, 8)
-minimizeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 44)
-minimizeBtn.Text = "−"
-minimizeBtn.TextColor3 = C.white
-minimizeBtn.TextSize = 20
-minimizeBtn.Font = Enum.Font.GothamBold
-minimizeBtn.BorderSizePixel = 0
-minimizeBtn.Parent = menuFrame
-
-Instance.new("UICorner", minimizeBtn).CornerRadius = UDim.new(0, 6)
-
--- ========== PETIT CARRÉ MINIMISÉ ==========
--- CHANGÉ: Position sur le côté droit (en haut) au lieu du centre
-local miniSquare = Instance.new("Frame")
-miniSquare.Name = "MiniSquare"
-miniSquare.Size = UDim2.new(0, 60, 0, 60)
-miniSquare.Position = UDim2.new(1, -70, 0, 20)  -- ← CHANGÉ: Côté droit, en haut
-miniSquare.BackgroundColor3 = C.menuBg
-miniSquare.BorderSizePixel = 0
-miniSquare.Visible = false
-miniSquare.Active = true
-miniSquare.Draggable = true
-miniSquare.ZIndex = 100  -- ZIndex élevé pour être au-dessus
-miniSquare.Parent = screenGui
-
-Instance.new("UICorner", miniSquare).CornerRadius = UDim.new(0, 8)
-Instance.new("UIStroke", miniSquare).Color = C.border
-miniSquare:FindFirstChildOfClass("UIStroke").Thickness = 1
-
--- Image dans le carré (À REMPLACER)
-local miniImage = Instance.new("ImageLabel")
-miniImage.Size = UDim2.new(1, 0, 1, 0)  -- Prend tout l'espace
-miniImage.Position = UDim2.new(0, 0, 0, 0)
-miniImage.BackgroundTransparency = 1
-miniImage.Image = "rbxassetid://0" -- ⬅️ METTRE TON IMAGE ICI
-miniImage.ScaleType = Enum.ScaleType.Fit
-miniImage.ZIndex = 1  -- ZIndex bas pour ne pas bloquer
-miniImage.Parent = miniSquare
-
--- Bouton pour agrandir
-local expandBtn = Instance.new("TextButton")
-expandBtn.Size = UDim2.new(1, 0, 1, 0)
-expandBtn.BackgroundTransparency = 1
-expandBtn.Text = ""
-expandBtn.ZIndex = 2  -- ZIndex moyen
-expandBtn.Modal = false  -- Important: permet les clics sur le frame parent
-expandBtn.Parent = miniSquare
-
--- ========== TOGGLE MINIMIZE ==========
-local isMinimized = false
-
-minimizeBtn.MouseButton1Click:Connect(function()
-    isMinimized = not isMinimized
-    
-    if isMinimized then
-        menuFrame.Visible = false
-        miniSquare.Visible = true
-    else
-        menuFrame.Visible = true
-        miniSquare.Visible = false
-    end
-end)
-
-expandBtn.MouseButton1Click:Connect(function()
-    isMinimized = false
-    menuFrame.Visible = true
-    miniSquare.Visible = false
-end)
-
--- Debug: Vérifier que le carré reçoit les clics
-expandBtn.MouseButton1Down:Connect(function()
-    print("✅ Clic sur le carré détecté!")
-end)
-
-miniSquare.DragBegin:Connect(function()
-    print("✅ Début du déplacement du carré!")
-end)
-
 -- ========== SIDEBAR ==========
+local sidebarWidth = isMobile and 150 or 200
+
 local sidebar = Instance.new("Frame")
 sidebar.Name = "Sidebar"
 sidebar.Size = UDim2.new(0, sidebarWidth, 1, 0)
@@ -189,17 +105,37 @@ sidebarBorder.BackgroundColor3 = C.border
 sidebarBorder.BorderSizePixel = 0
 sidebarBorder.Parent = sidebar
 
--- Logo "zen"
+-- Logo "zen" + Bouton minimize
+local logoFrame = Instance.new("Frame")
+logoFrame.Size = UDim2.new(1, 0, 0, 50)
+logoFrame.Position = UDim2.new(0, 0, 0, 8)
+logoFrame.BackgroundTransparency = 1
+logoFrame.Parent = sidebar
+
 local logo = Instance.new("TextLabel")
-logo.Size = UDim2.new(1, 0, 0, 50)
-logo.Position = UDim2.new(0, 16, 0, 8)
+logo.Size = UDim2.new(1, -40, 1, 0)
+logo.Position = UDim2.new(0, 16, 0, 0)
 logo.BackgroundTransparency = 1
 logo.Text = "zen"
 logo.TextColor3 = C.redLight
-logo.TextSize = 20 * textSizeMultiplier
+logo.TextSize = isMobile and 24 or 20
 logo.Font = Enum.Font.GothamBold
 logo.TextXAlignment = Enum.TextXAlignment.Left
-logo.Parent = sidebar
+logo.Parent = logoFrame
+
+-- BOUTON "-" MINIMIZE
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+minimizeBtn.Position = UDim2.new(1, -35, 0, 10)
+minimizeBtn.BackgroundColor3 = C.red
+minimizeBtn.Text = "-"
+minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = isMobile and 20 or 18
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.Parent = logoFrame
+
+Instance.new("UICorner", minimizeBtn).CornerRadius = UDim.new(0, 6)
 
 -- Fonction section title
 local function createSectionTitle(parent, text, yPos)
@@ -209,7 +145,7 @@ local function createSectionTitle(parent, text, yPos)
     title.BackgroundTransparency = 1
     title.Text = string.upper(text)
     title.TextColor3 = C.redDark
-    title.TextSize = 11 * textSizeMultiplier
+    title.TextSize = isMobile and 13 or 11
     title.Font = Enum.Font.GothamMedium
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Parent = parent
@@ -218,7 +154,7 @@ end
 -- Fonction nav item
 local function createNavItem(parent, text, yPos, active)
     local item = Instance.new("Frame")
-    item.Size = UDim2.new(1, -16, 0, 28)
+    item.Size = UDim2.new(1, -16, 0, isMobile and 35 or 28)
     item.Position = UDim2.new(0, 8, 0, yPos)
     item.BackgroundTransparency = 1
     item.Parent = parent
@@ -238,7 +174,7 @@ local function createNavItem(parent, text, yPos, active)
         dot.BackgroundTransparency = 1
         dot.Text = "*"
         dot.TextColor3 = C.red
-        dot.TextSize = 8 * textSizeMultiplier
+        dot.TextSize = isMobile and 10 or 8
         dot.Font = Enum.Font.GothamBold
         dot.Parent = item
     end
@@ -249,7 +185,7 @@ local function createNavItem(parent, text, yPos, active)
     label.BackgroundTransparency = 1
     label.Text = text
     label.TextColor3 = active and C.redText or C.gray
-    label.TextSize = 14 * textSizeMultiplier
+    label.TextSize = isMobile and 16 or 14
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = item
@@ -258,10 +194,10 @@ end
 -- Navigation
 createSectionTitle(sidebar, "Player", 60)
 createNavItem(sidebar, "Main", 82, true)
-createNavItem(sidebar, "Player", 110, false)
+createNavItem(sidebar, "Player", isMobile and 120 or 110, false)
 
-createSectionTitle(sidebar, "Visuals", 150)
-createNavItem(sidebar, "Players", 172, false)
+createSectionTitle(sidebar, "Visuals", isMobile and 165 or 150)
+createNavItem(sidebar, "Players", isMobile and 187 or 172, false)
 
 -- ========== MAIN CONTENT ==========
 local main = Instance.new("Frame")
@@ -283,7 +219,7 @@ headerText.Position = UDim2.new(0, 24, 0, 0)
 headerText.BackgroundTransparency = 1
 headerText.Text = "Main"
 headerText.TextColor3 = C.grayDark
-headerText.TextSize = 14 * textSizeMultiplier
+headerText.TextSize = isMobile and 16 or 14
 headerText.Font = Enum.Font.Gotham
 headerText.TextXAlignment = Enum.TextXAlignment.Left
 headerText.Parent = header
@@ -313,7 +249,7 @@ footerText.Size = UDim2.new(1, 0, 1, 0)
 footerText.BackgroundTransparency = 1
 footerText.Text = "zen [beta] for Blox Fruits"
 footerText.TextColor3 = C.footerText
-footerText.TextSize = 10 * textSizeMultiplier
+footerText.TextSize = isMobile and 12 or 10
 footerText.Font = Enum.Font.Gotham
 footerText.Parent = footer
 
@@ -324,16 +260,19 @@ contentArea.Size = UDim2.new(1, 0, 1, -70)
 contentArea.Position = UDim2.new(0, 0, 0, 40)
 contentArea.BackgroundTransparency = 1
 contentArea.BorderSizePixel = 0
-contentArea.ScrollBarThickness = 4
+contentArea.ScrollBarThickness = isMobile and 6 or 4
 contentArea.ScrollBarImageColor3 = Color3.fromRGB(51, 51, 51)
-contentArea.CanvasSize = UDim2.new(0, 0, 0, 600)
+contentArea.CanvasSize = UDim2.new(0, 0, 0, 520)
 contentArea.Parent = main
 
 -- ========== FONCTIONS PANELS ==========
 
 local function createToggle(parent, pos, callback)
+    local toggleSize = isMobile and 45 or 38
+    local knobSize = isMobile and 20 or 16
+    
     local toggle = Instance.new("Frame")
-    toggle.Size = UDim2.new(0, 38, 0, 20)
+    toggle.Size = UDim2.new(0, toggleSize, 0, isMobile and 24 or 20)
     toggle.Position = pos
     toggle.BackgroundColor3 = C.gray
     toggle.BorderSizePixel = 0
@@ -342,7 +281,7 @@ local function createToggle(parent, pos, callback)
     Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 10)
 
     local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.Size = UDim2.new(0, knobSize, 0, knobSize)
     knob.Position = UDim2.new(0, 2, 0, 2)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     knob.BorderSizePixel = 0
@@ -363,7 +302,7 @@ local function createToggle(parent, pos, callback)
         
         if isOn then
             toggle.BackgroundColor3 = C.red
-            knob.Position = UDim2.new(0, 20, 0, 2)
+            knob.Position = UDim2.new(0, toggleSize - knobSize - 2, 0, 2)
         else
             toggle.BackgroundColor3 = C.gray
             knob.Position = UDim2.new(0, 2, 0, 2)
@@ -375,9 +314,11 @@ local function createToggle(parent, pos, callback)
     return toggle, btn
 end
 
-local function createSlider(parent, pos, value, maxVal, callback)
+local function createSlider(parent, pos, value, callback)
+    local sliderWidth = isMobile and 150 or 120
+    
     local sliderBg = Instance.new("Frame")
-    sliderBg.Size = UDim2.new(0, 120, 0, 4)
+    sliderBg.Size = UDim2.new(0, sliderWidth, 0, isMobile and 6 : 4)
     sliderBg.Position = pos
     sliderBg.BackgroundColor3 = C.sliderBg
     sliderBg.BorderSizePixel = 0
@@ -386,7 +327,7 @@ local function createSlider(parent, pos, value, maxVal, callback)
     Instance.new("UICorner", sliderBg).CornerRadius = UDim.new(0, 2)
 
     local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(value / maxVal, 0, 1, 0)
+    fill.Size = UDim2.new(value / 100, 0, 1, 0)
     fill.BackgroundColor3 = C.red
     fill.BorderSizePixel = 0
     fill.Parent = sliderBg
@@ -410,19 +351,18 @@ local function createSlider(parent, pos, value, maxVal, callback)
     UserInputService.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local relativePos = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+            local newValue = math.floor(relativePos * 100)
             fill.Size = UDim2.new(relativePos, 0, 1, 0)
-            if callback then callback(relativePos * maxVal) end
+            if callback then callback(newValue) end
         end
     end)
-    
-    return sliderBg, fill
 end
 
--- Fonction panel complet
+-- Fonction panel complet (SANS checkboxes Enable)
 local function createPanel(parent, title, xPos, yPos, rows, onToggle)
-    local panelWidth = isMobile and 260 or 290
-    local headerHeight = 36
-    local rowHeight = 22
+    local panelWidth = isMobile and 280 or 290
+    local headerHeight = isMobile and 42 or 36
+    local rowHeight = isMobile and 28 or 22
     local panelHeight = headerHeight + 16 + (#rows * rowHeight)
 
     local panel = Instance.new("Frame")
@@ -443,27 +383,27 @@ local function createPanel(parent, title, xPos, yPos, rows, onToggle)
     panelHeader.Parent = panel
 
     local panelIcon = Instance.new("TextLabel")
-    panelIcon.Size = UDim2.new(0, 16, 0, 16)
-    panelIcon.Position = UDim2.new(0, 12, 0.5, -8)
+    panelIcon.Size = UDim2.new(0, isMobile and 20 or 16, 0, isMobile and 20 or 16)
+    panelIcon.Position = UDim2.new(0, 12, 0.5, isMobile and -10 or -8)
     panelIcon.BackgroundTransparency = 1
     panelIcon.Text = "*"
     panelIcon.TextColor3 = C.red
-    panelIcon.TextSize = 14 * textSizeMultiplier
+    panelIcon.TextSize = isMobile and 18 or 14
     panelIcon.Font = Enum.Font.GothamBold
     panelIcon.Parent = panelHeader
 
     local panelTitle = Instance.new("TextLabel")
     panelTitle.Size = UDim2.new(0, 150, 1, 0)
-    panelTitle.Position = UDim2.new(0, 30, 0, 0)
+    panelTitle.Position = UDim2.new(0, isMobile and 35 or 30, 0, 0)
     panelTitle.BackgroundTransparency = 1
     panelTitle.Text = title
     panelTitle.TextColor3 = C.white
-    panelTitle.TextSize = 14 * textSizeMultiplier
+    panelTitle.TextSize = isMobile and 16 or 14
     panelTitle.Font = Enum.Font.GothamSemibold
     panelTitle.TextXAlignment = Enum.TextXAlignment.Left
     panelTitle.Parent = panelHeader
 
-    createToggle(panelHeader, UDim2.new(1, -50, 0.5, -10), onToggle)
+    createToggle(panelHeader, UDim2.new(1, isMobile and -55 or -50, 0.5, isMobile and -12 or -10), onToggle)
 
     local headerSep = Instance.new("Frame")
     headerSep.Size = UDim2.new(1, 0, 0, 1)
@@ -481,14 +421,14 @@ local function createPanel(parent, title, xPos, yPos, rows, onToggle)
         rowLabel.Position = UDim2.new(0, 16, 0, yOffset)
         rowLabel.BackgroundTransparency = 1
         rowLabel.Text = row.label
-        rowLabel.TextColor3 = C.grayLight
-        rowLabel.TextSize = 12 * textSizeMultiplier
-        rowLabel.Font = Enum.Font.Gotham
+        rowLabel.TextColor3 = row.bold and C.boldText or C.grayLight
+        rowLabel.TextSize = isMobile and 14 or 12
+        rowLabel.Font = row.bold and Enum.Font.GothamMedium or Enum.Font.Gotham
         rowLabel.TextXAlignment = Enum.TextXAlignment.Left
         rowLabel.Parent = panel
 
         if row.type == "slider" then
-            createSlider(panel, UDim2.new(1, -136, 0, yOffset + 9), row.value, row.max or 100, row.callback)
+            createSlider(panel, UDim2.new(1, isMobile and -160 or -136, 0, yOffset + (isMobile and 11 or 9)), row.value, row.callback)
         elseif row.type == "status" then
             row.labelObj = rowLabel
         end
@@ -499,6 +439,7 @@ end
 
 -- ========== FEATURES BACKEND ==========
 
+-- HITBOX
 local function createInvisibleHitbox(character)
     if not character then return false end
     
@@ -563,6 +504,7 @@ local function setupPlayer(otherPlayer)
     end
 end
 
+-- NO ANIMATION
 local function disableAllAnimations()
     if animationConnection then
         animationConnection:Disconnect()
@@ -591,6 +533,7 @@ local function disableAllAnimations()
     end)
 end
 
+-- AUTO-CLICK
 local function hasSwordEquipped()
     if not player.Character then return false end
     
@@ -625,6 +568,7 @@ local function startAutoClick()
     end)
 end
 
+-- PORTAL CHECK
 local function checkPortalEquipped()
     if not player.Character then return false end
     
@@ -656,6 +600,7 @@ local function startPortalCheck()
     end)
 end
 
+-- PORTAL X
 local function callPortalX()
     if not portalRemote then
         return false
@@ -678,7 +623,7 @@ local function callPortalX()
     return true
 end
 
--- MASTER HOOK (AVEC COOLDOWN SORU)
+-- MASTER HOOK
 local function installMasterHook()
     local CommE = nil
     pcall(function()
@@ -686,6 +631,8 @@ local function installMasterHook()
     end)
     
     if not CommE then return false end
+    
+    local soruCooldownActive = false
     
     local mt = getrawmetatable(game)
     local oldNamecall = mt.__namecall
@@ -708,16 +655,18 @@ local function installMasterHook()
             end
         end
         
-        -- DÉTECTER SORU (AVEC COOLDOWN 15S)
+        -- DÉTECTER SORU
         if self == CommE and method == "FireServer" and args[1] == "Soru" then
-            local soruTimeLeft = soruCooldown - (tick() - lastSoruUse)
-            
-            if autoXAfterSoruEnabled and soruTimeLeft <= 0 and hasPortalEquipped then
-                lastSoruUse = tick()
+            if autoXAfterSoruEnabled and not soruCooldownActive and hasPortalEquipped then
+                soruCooldownActive = true
                 
                 task.spawn(function()
-                    wait(portalReactionSpeed) -- AJUSTABLE
+                    wait(0.1)
                     callPortalX()
+                end)
+                
+                task.delay(soruCooldown, function()
+                    soruCooldownActive = false
                 end)
             end
         end
@@ -730,12 +679,12 @@ local function installMasterHook()
     return true
 end
 
--- ========== CREATION DES PANELS ==========
+-- ========== PANELS (SANS "Enable...") ==========
 
--- Panel 1: Hitbox Expander
+-- Panel 1: Hitbox
 createPanel(contentArea, "Hitbox Expander", 16, 8, {
-    { label = "Hitbox Size", type = "slider", value = 20, max = 45, callback = function(value)
-        hitboxSize = math.floor(value + 5)
+    { label = "Hitbox Size", type = "slider", value = 20, callback = function(value)
+        hitboxSize = math.floor((value / 100) * 45 + 5)
         if hitboxEnabled then
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= player and p.Character then
@@ -763,8 +712,7 @@ createPanel(contentArea, "Hitbox Expander", 16, 8, {
 end)
 
 -- Panel 2: No Animation
-createPanel(contentArea, "No Animation", isMobile and 16 or 318, isMobile and 100 or 8, {
-}, function(state)
+createPanel(contentArea, "No Animation", isMobile and 16 or 318, isMobile and 90 or 8, {}, function(state)
     noAnimationEnabled = state
     
     if state then
@@ -778,8 +726,7 @@ createPanel(contentArea, "No Animation", isMobile and 16 or 318, isMobile and 10
 end)
 
 -- Panel 3: Auto-Click
-createPanel(contentArea, "Auto-Click Sword", 16, isMobile and 180 or 150, {
-}, function(state)
+createPanel(contentArea, "Auto-Click Sword", isMobile and 16 or 16, isMobile and 160 or 150, {}, function(state)
     autoClickEnabled = state
     
     if state then
@@ -792,11 +739,8 @@ createPanel(contentArea, "Auto-Click Sword", 16, isMobile and 180 or 150, {
     end
 end)
 
--- Panel 4: Auto Portal-X (AVEC SLIDER VITESSE)
-local portalPanel = createPanel(contentArea, "Auto Portal-X", isMobile and 16 or 318, isMobile and 260 or 106, {
-    { label = "Reaction Speed", type = "slider", value = 0.1, max = 0.5, callback = function(value)
-        portalReactionSpeed = math.floor(value * 100) / 100
-    end },
+-- Panel 4: Auto Portal-X
+local portalPanel = createPanel(contentArea, "Auto Portal-X", isMobile and 16 or 318, isMobile and 230 or 106, {
     { label = "Status", type = "status" },
 }, function(state)
     autoXAfterSoruEnabled = state
@@ -814,15 +758,12 @@ end)
 -- Update Portal Status
 RunService.Heartbeat:Connect(function()
     if autoXAfterSoruEnabled then
-        local portalTimeLeft = portalCooldown - (tick() - lastPortalUse)
-        local soruTimeLeft = soruCooldown - (tick() - lastSoruUse)
+        local timeLeft = portalCooldown - (tick() - lastPortalUse)
         
         local statusText = ""
         if portalRemote then
-            if portalTimeLeft > 0 then
-                statusText = string.format("X CD: %.1fs", portalTimeLeft)
-            elseif soruTimeLeft > 0 then
-                statusText = string.format("Soru CD: %.1fs", soruTimeLeft)
+            if timeLeft > 0 then
+                statusText = string.format("CD: %.1fs", timeLeft)
             else
                 statusText = "Ready!"
             end
@@ -833,11 +774,73 @@ RunService.Heartbeat:Connect(function()
         end
         
         for _, obj in pairs(portalPanel:GetDescendants()) do
-            if obj:IsA("TextLabel") and obj.Text == "Status" then
+            if obj:IsA("TextLabel") and obj.Name ~= "Logo" and obj.Text:find("Status") then
                 obj.Text = statusText
                 break
             end
         end
+    end
+end)
+
+-- ========== MINIMIZE BOUTON ==========
+local isMinimized = false
+local savedPosition = menuFrame.Position
+local savedSize = menuFrame.Size
+
+minimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    
+    if isMinimized then
+        -- MINIMISER (petit carré)
+        savedPosition = menuFrame.Position
+        savedSize = menuFrame.Size
+        
+        menuFrame:TweenSizeAndPosition(
+            UDim2.new(0, 60, 0, 60),
+            UDim2.new(0, 20, 0, 20),
+            Enum.EasingDirection.Out,
+            Enum.EasingStyle.Quad,
+            0.3,
+            true
+        )
+        
+        -- Cacher tout sauf logo
+        sidebar.Visible = false
+        main.Visible = false
+        minimizeBtn.Text = "+"
+        
+        -- Rendre logo visible
+        logo.Visible = true
+        logo.Size = UDim2.new(1, 0, 1, 0)
+        logo.Position = UDim2.new(0, 0, 0, 0)
+        logo.TextSize = isMobile and 28 : 24
+        
+        minimizeBtn.Position = UDim2.new(1, -25, 0, 2)
+        minimizeBtn.Size = UDim2.new(0, 20, 0, 20)
+        
+    else
+        -- RESTAURER
+        menuFrame:TweenSizeAndPosition(
+            savedSize,
+            savedPosition,
+            Enum.EasingDirection.Out,
+            Enum.EasingStyle.Quad,
+            0.3,
+            true
+        )
+        
+        task.wait(0.3)
+        
+        sidebar.Visible = true
+        main.Visible = true
+        minimizeBtn.Text = "-"
+        
+        logo.Size = UDim2.new(1, -40, 1, 0)
+        logo.Position = UDim2.new(0, 16, 0, 0)
+        logo.TextSize = isMobile and 24 or 20
+        
+        minimizeBtn.Position = UDim2.new(1, -35, 0, 10)
+        minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
     end
 end)
 
@@ -850,6 +853,7 @@ Players.PlayerAdded:Connect(setupPlayer)
 
 print("========================================")
 print("✅ zen chargé!")
-print("📱 Mode:", isMobile and "MOBILE" or "PC")
-print("📍 Carré minimisé: Côté droit en haut")
+print("📱 Mobile: " .. tostring(isMobile))
+print("⏱️ Cooldown Portal X: 18.75s")
+print("⏱️ Cooldown Soru: 15s")
 print("========================================")
