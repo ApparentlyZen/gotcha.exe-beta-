@@ -1,5 +1,5 @@
 -- zen - Menu Gotcha.exe style
--- Version FINALE avec minimisation + FIX GUI
+-- Version FINALE avec minimisation + FIX Mobile
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -658,7 +658,7 @@ local function callPortalX()
     return true
 end
 
--- MASTER HOOK (UN SEUL)
+-- MASTER HOOK (SORU → X PORTAL)
 local function installMasterHook()
     local CommE = nil
     pcall(function()
@@ -713,7 +713,7 @@ local function installMasterHook()
     
     setreadonly(mt, true)
     
-    print("✅ Hook installé!")
+    print("✅ Hook Soru installé!")
     return true
 end
 
@@ -823,10 +823,25 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- ========== MINIMIZE BOUTON ==========
+-- ========== MINIMIZE BOUTON (FIX MOBILE) ==========
 local isMinimized = false
 local savedPosition = menuFrame.Position
 local savedSize = menuFrame.Size
+
+-- FIX MOBILE: Zone cliquable invisible sur le carré
+local expandArea = Instance.new("Frame")
+expandArea.Size = UDim2.new(1, 0, 1, 0)
+expandArea.BackgroundTransparency = 1
+expandArea.ZIndex = 5
+expandArea.Visible = false
+expandArea.Parent = menuFrame
+
+local expandBtn = Instance.new("TextButton")
+expandBtn.Size = UDim2.new(1, 0, 1, 0)
+expandBtn.BackgroundTransparency = 1
+expandBtn.Text = ""
+expandBtn.ZIndex = 6
+expandBtn.Parent = expandArea
 
 minimizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
@@ -835,13 +850,18 @@ minimizeBtn.MouseButton1Click:Connect(function()
         savedPosition = menuFrame.Position
         savedSize = menuFrame.Size
         
+        menuFrame.Draggable = false
+        
         menuFrame:TweenSizeAndPosition(
             UDim2.new(0, 60, 0, 60),
             UDim2.new(0, 20, 0, 20),
             Enum.EasingDirection.Out,
             Enum.EasingStyle.Quad,
             0.3,
-            true
+            true,
+            function()
+                menuFrame.Draggable = true
+            end
         )
         
         sidebar.Visible = false
@@ -856,14 +876,22 @@ minimizeBtn.MouseButton1Click:Connect(function()
         minimizeBtn.Position = UDim2.new(1, -25, 0, 2)
         minimizeBtn.Size = UDim2.new(0, 20, 0, 20)
         
+        -- ACTIVER zone cliquable (mobile)
+        expandArea.Visible = true
+        
     else
+        menuFrame.Draggable = false
+        
         menuFrame:TweenSizeAndPosition(
             savedSize,
             savedPosition,
             Enum.EasingDirection.Out,
             Enum.EasingStyle.Quad,
             0.3,
-            true
+            true,
+            function()
+                menuFrame.Draggable = true
+            end
         )
         
         task.wait(0.3)
@@ -878,6 +906,16 @@ minimizeBtn.MouseButton1Click:Connect(function()
         
         minimizeBtn.Position = UDim2.new(1, -35, 0, 10)
         minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+        
+        -- DÉSACTIVER zone cliquable
+        expandArea.Visible = false
+    end
+end)
+
+-- FIX MOBILE: Cliquer sur le carré pour ouvrir
+expandBtn.MouseButton1Click:Connect(function()
+    if isMinimized then
+        minimizeBtn.MouseButton1Click:Fire()
     end
 end)
 
@@ -892,4 +930,5 @@ print("========================================")
 print("✅ zen chargé!")
 print("📱 Mobile:", tostring(isMobile))
 print("⏱️ Portal CD: 18.75s | Soru CD: 15s")
+print("⚡ Soru → X Portal")
 print("========================================")
