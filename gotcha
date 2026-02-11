@@ -1,5 +1,5 @@
 -- zen - Menu Gotcha.exe style
--- Version FINALE avec minimisation + FIX GUI
+-- Version FINALE avec minimisation + FIX GUI + FIX Mobile
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -67,6 +67,7 @@ local portalCooldown = 18.75
 local soruCooldown = 15
 local lastPortalUse = 0
 local portalReactionSpeed = 0.1
+local lastPosition = nil -- NOUVEAU: Pour détecter téléport
 
 -- Détection mobile
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -658,20 +659,57 @@ local function callPortalX()
     return true
 end
 
--- MASTER HOOK (UN SEUL)
-local function installMasterHook()
-    local CommE = nil
-    pcall(function()
-        CommE = ReplicatedStorage:WaitForChild("Remotes", 5):WaitForChild("CommE", 5)
-    end)
-    
-    if not CommE then 
-        print("⚠️ CommE introuvable")
-        return false 
+-- DÉTECTION FLASH STEP (TÉLÉPORT)
+local teleportDetectionConnection = nil
+
+local function startTeleportDetection()
+    if teleportDetectionConnection then
+        teleportDetectionConnection:Disconnect()
     end
     
+    lastPosition = nil
     local lastSoruUse = 0
     
+    teleportDetectionConnection = RunService.Heartbeat:Connect(function()
+        if not autoXAfterSoruEnabled then return end
+        
+        local char = player.Character
+        if not char then return end
+        
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        
+        local currentPos = hrp.Position
+        local currentTime = tick()
+        
+        if lastPosition then
+            local distance = (currentPos - lastPosition).Magnitude
+            
+            -- DÉTECTION: Téléport > 1 stud (au lieu de 70)
+            if distance > 1 and (currentTime - lastSoruUse) >= soruCooldown and hasPortalEquipped then
+                lastSoruUse = currentTime
+                
+                task.spawn(function()
+                    wait(portalReactionSpeed)
+                    callPortalX()
+                end)
+            end
+        end
+        
+        lastPosition = currentPos
+    end)
+end
+
+local function stopTeleportDetection()
+    if teleportDetectionConnection then
+        teleportDetectionConnection:Disconnect()
+        teleportDetectionConnection = nil
+    end
+    lastPosition = nil
+end
+
+-- MASTER HOOK (CAPTURE REMOTE SEULEMENT)
+local function installMasterHook()
     local mt = getrawmetatable(game)
     local oldNamecall = mt.__namecall
     setreadonly(mt, false)
@@ -691,20 +729,6 @@ local function installMasterHook()
                 if args[1] == "X" then
                     lastPortalUse = tick()
                 end
-            end
-        end
-        
-        -- DÉTECTER SORU (AVEC COOLDOWN 15S)
-        if self == CommE and method == "FireServer" and args[1] == "Soru" then
-            local soruTimeLeft = soruCooldown - (tick() - lastSoruUse)
-            
-            if autoXAfterSoruEnabled and soruTimeLeft <= 0 and hasPortalEquipped then
-                lastSoruUse = tick()
-                
-                task.spawn(function()
-                    wait(portalReactionSpeed)
-                    callPortalX()
-                end)
             end
         end
         
@@ -789,10 +813,12 @@ local portalPanel = createPanel(contentArea, "Auto Portal-X", isMobile and 16 or
     if state then
         startPortalCheck()
         installMasterHook()
+        startTeleportDetection() -- NOUVEAU: Détecter téléport
     else
         if portalCheckConnection then
             portalCheckConnection:Disconnect()
         end
+        stopTeleportDetection()
     end
 end)
 
@@ -823,10 +849,19 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- ========== MINIMIZE BOUTON ==========
+-- ========== MINIMIZE BOUTON (FIX MOBILE) ==========
 local isMinimized = false
 local savedPosition = menuFrame.Position
 local savedSize = menuFrame.Size
+
+-- FIX MOBILE: Bouton invisible sur le carré minimisé
+local expandClickArea = Instance.new("TextButton")
+expandClickArea.Size = UDim2.new(1, 0, 1, 0)
+expandClickArea.BackgroundTransparency = 1
+expandClickArea.Text = ""
+expandClickArea.ZIndex = 10
+expandClickArea.Visible = false
+expandClickArea.Parent = menuFrame
 
 minimizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
@@ -835,13 +870,18 @@ minimizeBtn.MouseButton1Click:Connect(function()
         savedPosition = menuFrame.Position
         savedSize = menuFrame.Size
         
+        menuFrame.Draggable = false -- Désactiver drag pendant animation
+        
         menuFrame:TweenSizeAndPosition(
             UDim2.new(0, 60, 0, 60),
             UDim2.new(0, 20, 0, 20),
             Enum.EasingDirection.Out,
             Enum.EasingStyle.Quad,
             0.3,
-            true
+            true,
+            function()
+                menuFrame.Draggable = true -- Réactiver après animation
+            end
         )
         
         sidebar.Visible = false
@@ -856,14 +896,22 @@ minimizeBtn.MouseButton1Click:Connect(function()
         minimizeBtn.Position = UDim2.new(1, -25, 0, 2)
         minimizeBtn.Size = UDim2.new(0, 20, 0, 20)
         
+        -- ACTIVER zone cliquable pour mobile
+        expandClickArea.Visible = true
+        
     else
+        menuFrame.Draggable = false
+        
         menuFrame:TweenSizeAndPosition(
             savedSize,
             savedPosition,
             Enum.EasingDirection.Out,
             Enum.EasingStyle.Quad,
             0.3,
-            true
+            true,
+            function()
+                menuFrame.Draggable = true
+            end
         )
         
         task.wait(0.3)
@@ -878,6 +926,16 @@ minimizeBtn.MouseButton1Click:Connect(function()
         
         minimizeBtn.Position = UDim2.new(1, -35, 0, 10)
         minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+        
+        -- DÉSACTIVER zone cliquable
+        expandClickArea.Visible = false
+    end
+end)
+
+-- FIX MOBILE: Cliquer n'importe où sur le carré pour ouvrir
+expandClickArea.MouseButton1Click:Connect(function()
+    if isMinimized then
+        minimizeBtn.MouseButton1Click:Fire()
     end
 end)
 
@@ -892,4 +950,5 @@ print("========================================")
 print("✅ zen chargé!")
 print("📱 Mobile:", tostring(isMobile))
 print("⏱️ Portal CD: 18.75s | Soru CD: 15s")
+print("⚡ Flash Step: >1 stud détecté")
 print("========================================")
