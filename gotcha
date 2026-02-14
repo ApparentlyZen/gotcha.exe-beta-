@@ -1,5 +1,5 @@
--- zen - Version FINALE avec AUTO-CAPTURE
--- SANS COOLDOWNS + Auto-capture après mort
+-- zen - Version FINALE CORRIGÉE
+-- Bug minimize fixed
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -613,7 +613,42 @@ local function startPortalCheck()
     end)
 end
 
--- MASTER HOOK (SANS COOLDOWNS)
+-- SAUVEGARDE REMOTE
+local remoteInfo = {
+    captured = false,
+    className = nil,
+    parentName = nil
+}
+
+local function relocatePortalRemote()
+    if not remoteInfo.captured then
+        print("⚠️ Aucune info sauvegardée - Appuie sur X")
+        return false
+    end
+    
+    local char = player.Character
+    if not char then return false end
+    
+    local parent = char:FindFirstChild(remoteInfo.parentName)
+    if not parent then 
+        print("⚠️ Parent introuvable:", remoteInfo.parentName)
+        return false
+    end
+    
+    for _, child in pairs(parent:GetChildren()) do
+        if child.ClassName == remoteInfo.className then
+            portalRemote = child
+            print("✅ Remote Portal RE-LOCALISÉ!")
+            print("📍 Path:", child:GetFullName())
+            return true
+        end
+    end
+    
+    print("⚠️ Remote introuvable - Réessai...")
+    return false
+end
+
+-- MASTER HOOK
 local function installMasterHook()
     if hookInstalled then
         print("⚠️ Hook déjà installé")
@@ -640,13 +675,20 @@ local function installMasterHook()
         local method = getnamecallmethod()
         local args = {...}
         
-        -- CAPTURER REMOTE PORTAL (MODIFIÉ)
+        -- CAPTURER + SAUVEGARDER
         if (method == "FireServer" or method == "InvokeServer") and type(args[1]) == "string" then
             if args[1] == "X" or args[1] == "Z" or args[1] == "C" then
                 if not portalRemote then
                     portalRemote = self
-                    print("✅ Remote Portal capturé manuellement!")
+                    
+                    remoteInfo.captured = true
+                    remoteInfo.className = self.ClassName
+                    remoteInfo.parentName = self.Parent.Name
+                    
+                    print("✅ Remote Portal CAPTURÉ ET SAUVEGARDÉ!")
                     print("📍 Path:", self:GetFullName())
+                    print("💾 Type:", remoteInfo.className)
+                    print("💾 Parent:", remoteInfo.parentName)
                 end
                 
                 if args[1] == "X" then
@@ -655,7 +697,7 @@ local function installMasterHook()
             end
         end
         
-        -- DÉTECTER SORU (SANS COOLDOWN)
+        -- DÉTECTER SORU
         if self == CommE and method == "FireServer" and args[1] == "Soru" then
             if autoXAfterSoruEnabled and portalRemote then
                 task.spawn(function()
@@ -668,7 +710,6 @@ local function installMasterHook()
                             portalRemote:InvokeServer("X")
                         end
                         lastPortalUse = tick()
-                        print("✅ Portal X envoyé!")
                     end)
                 end)
             elseif autoXAfterSoruEnabled and not portalRemote then
@@ -682,51 +723,8 @@ local function installMasterHook()
     setreadonly(mt, true)
     
     hookInstalled = true
-    print("✅ Hook Soru installé! (SANS COOLDOWN)")
+    print("✅ Hook Soru installé!")
     return true
-end
-
--- AUTO-CAPTURE Remote Portal (NOUVEAU)
-local function findPortalRemote()
-    local char = player.Character
-    if not char then return nil end
-    
-    local humanoid = char:FindFirstChild("Humanoid")
-    if not humanoid then return nil end
-    
-    -- Chercher RemoteFunction dans Humanoid
-    for _, child in pairs(humanoid:GetChildren()) do
-        if child:IsA("RemoteFunction") then
-            print("🔍 RemoteFunction trouvée dans Humanoid!")
-            return child
-        end
-    end
-    
-    return nil
-end
-
-local function autoCapturePortalRemote()
-    task.spawn(function()
-        local attempts = 0
-        
-        while not portalRemote and attempts < 50 do
-            attempts = attempts + 1
-            
-            local remote = findPortalRemote()
-            if remote then
-                portalRemote = remote
-                print("✅ Remote Portal AUTO-CAPTURÉ!")
-                print("📍 Path:", remote:GetFullName())
-                return
-            end
-            
-            task.wait(0.2)
-        end
-        
-        if not portalRemote then
-            print("⚠️ Auto-capture échoué - Utilise X manuellement")
-        end
-    end)
 end
 
 -- ========== PANELS ==========
@@ -799,7 +797,6 @@ local portalPanel = createPanel(contentArea, "Auto Portal-X", isMobile and 16 or
     end
 end)
 
--- Update Portal Status (SIMPLIFIÉ)
 RunService.Heartbeat:Connect(function()
     if autoXAfterSoruEnabled then
         local statusText = ""
@@ -818,7 +815,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- ========== MINIMIZE - ROND DRAGGABLE ==========
+-- ========== MINIMIZE (CORRIGÉ) ==========
 local isMinimized = false
 local savedPosition = menuFrame.Position
 local savedSize = menuFrame.Size
@@ -827,31 +824,39 @@ local dragging = false
 local dragInput = nil
 local dragStart = nil
 local startPos = nil
+local dragMoved = false
 
 local function updateDrag(input)
     if dragging then
         local delta = input.Position - dragStart
-        menuFrame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
+        local distance = math.sqrt(delta.X * delta.X + delta.Y * delta.Y)
+        
+        if distance > 5 then
+            dragMoved = true
+            menuFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
     end
 end
 
-minimizeBtn.MouseButton1Click:Connect(function()
+local function toggleMinimize()
     isMinimized = not isMinimized
     
     if isMinimized then
+        -- SAUVEGARDER AVANT L'ANIMATION
         savedPosition = menuFrame.Position
         savedSize = menuFrame.Size
         
         menuFrame.Draggable = false
         
+        -- ANIMATION → ROND (sans changer position)
         menuFrame:TweenSizeAndPosition(
             UDim2.new(0, 70, 0, 70),
-            UDim2.new(0, 20, 0, 20),
+            menuFrame.Position,
             Enum.EasingDirection.Out,
             Enum.EasingStyle.Quad,
             0.3,
@@ -876,19 +881,13 @@ minimizeBtn.MouseButton1Click:Connect(function()
         menuFrame:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(1, 0)
         
     else
+        -- RESTAURER
         menuFrame.Draggable = false
         
-        menuFrame:TweenSizeAndPosition(
-            savedSize,
-            savedPosition,
-            Enum.EasingDirection.Out,
-            Enum.EasingStyle.Quad,
-            0.3,
-            true
-        )
+        -- Restaurer coins
+        menuFrame:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, 8)
         
-        task.wait(0.3)
-        
+        -- Restaurer contenu
         sidebar.Visible = true
         main.Visible = true
         minimizeBtn.Text = "−"
@@ -903,21 +902,40 @@ minimizeBtn.MouseButton1Click:Connect(function()
         minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
         minimizeBtn.TextSize = isMobile and 20 or 18
         
-        menuFrame:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, 8)
+        -- ANIMATION RESTAURATION
+        menuFrame:TweenSizeAndPosition(
+            savedSize,
+            savedPosition,
+            Enum.EasingDirection.Out,
+            Enum.EasingStyle.Quad,
+            0.3,
+            true
+        )
+        
+        task.wait(0.3)
         
         menuFrame.Draggable = true
     end
-end)
+end
+
+minimizeBtn.MouseButton1Click:Connect(toggleMinimize)
 
 menuFrame.InputBegan:Connect(function(input)
     if isMinimized and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
         dragging = true
+        dragMoved = false
         dragStart = input.Position
         startPos = menuFrame.Position
         
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
+                
+                if not dragMoved then
+                    toggleMinimize()
+                end
+                
+                dragMoved = false
             end
         end)
     end
@@ -941,12 +959,9 @@ end
 
 Players.PlayerAdded:Connect(setupPlayer)
 
--- ========== FIX: RÉACTIVER APRÈS MORT (MODIFIÉ) ==========
+-- ========== RE-LOCALISER APRÈS MORT ==========
 player.CharacterAdded:Connect(function(character)
     print("🔄 Respawn détecté!")
-    
-    portalRemote = nil
-    print("🔄 Remote réinitialisé - Recherche auto...")
     
     character:WaitForChild("HumanoidRootPart", 10)
     character:WaitForChild("Humanoid", 10)
@@ -954,17 +969,30 @@ player.CharacterAdded:Connect(function(character)
     
     if autoXAfterSoruEnabled then
         if not hookInstalled then
-            print("🔄 Réinstallation hook...")
             installMasterHook()
         end
         
-        print("🔍 Recherche du remote Portal...")
-        autoCapturePortalRemote()
+        if remoteInfo.captured then
+            print("🔍 Re-localisation...")
+            
+            local attempts = 0
+            while not relocatePortalRemote() and attempts < 20 do
+                attempts = attempts + 1
+                task.wait(0.5)
+            end
+            
+            if portalRemote then
+                print("✅ Opérationnel!")
+            else
+                print("⚠️ Échec - Appuie sur X")
+            end
+        else
+            print("⚠️ Appuie sur X une fois")
+        end
     end
 end)
 
 print("========================================")
 print("✅ zen chargé!")
-print("🔥 SANS COOLDOWN - Spam illimité!")
-print("🤖 AUTO-CAPTURE après respawn!")
+print("💾 Appuie sur X UNE FOIS!")
 print("========================================")
