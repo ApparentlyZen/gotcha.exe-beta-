@@ -1,5 +1,5 @@
--- zen - Version FINALE
--- SANS COOLDOWNS + Remote persiste
+-- zen - Version FINALE avec AUTO-CAPTURE
+-- SANS COOLDOWNS + Auto-capture après mort
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -58,10 +58,10 @@ local autoClickConnection = nil
 local animationConnection = nil
 local hasPortalEquipped = false
 local portalCheckConnection = nil
-local portalRemote = nil  -- GLOBAL - Persiste après mort
+local portalRemote = nil
 local lastPortalUse = 0
 local portalReactionSpeed = 0.1
-local hookInstalled = false  -- Pour éviter double installation
+local hookInstalled = false
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
@@ -613,7 +613,7 @@ local function startPortalCheck()
     end)
 end
 
--- MASTER HOOK (SANS COOLDOWNS - PERSISTE)
+-- MASTER HOOK (SANS COOLDOWNS)
 local function installMasterHook()
     if hookInstalled then
         print("⚠️ Hook déjà installé")
@@ -640,12 +640,13 @@ local function installMasterHook()
         local method = getnamecallmethod()
         local args = {...}
         
-        -- CAPTURER REMOTE PORTAL (PERSISTE APRÈS MORT)
+        -- CAPTURER REMOTE PORTAL (MODIFIÉ)
         if (method == "FireServer" or method == "InvokeServer") and type(args[1]) == "string" then
             if args[1] == "X" or args[1] == "Z" or args[1] == "C" then
                 if not portalRemote then
                     portalRemote = self
-                    print("✅ Remote Portal capturé! (Persiste)")
+                    print("✅ Remote Portal capturé manuellement!")
+                    print("📍 Path:", self:GetFullName())
                 end
                 
                 if args[1] == "X" then
@@ -656,7 +657,6 @@ local function installMasterHook()
         
         -- DÉTECTER SORU (SANS COOLDOWN)
         if self == CommE and method == "FireServer" and args[1] == "Soru" then
-            -- SEULEMENT VÉRIFIER: Feature ON + Remote capturé
             if autoXAfterSoruEnabled and portalRemote then
                 task.spawn(function()
                     wait(portalReactionSpeed)
@@ -664,7 +664,7 @@ local function installMasterHook()
                     pcall(function()
                         if portalRemote.ClassName == "RemoteEvent" then
                             portalRemote:FireServer("X")
-                        else
+                        elseif portalRemote.ClassName == "RemoteFunction" then
                             portalRemote:InvokeServer("X")
                         end
                         lastPortalUse = tick()
@@ -672,7 +672,7 @@ local function installMasterHook()
                     end)
                 end)
             elseif autoXAfterSoruEnabled and not portalRemote then
-                print("⚠️ Remote pas capturé - Utilise X une fois!")
+                print("⚠️ Remote pas capturé!")
             end
         end
         
@@ -684,6 +684,49 @@ local function installMasterHook()
     hookInstalled = true
     print("✅ Hook Soru installé! (SANS COOLDOWN)")
     return true
+end
+
+-- AUTO-CAPTURE Remote Portal (NOUVEAU)
+local function findPortalRemote()
+    local char = player.Character
+    if not char then return nil end
+    
+    local humanoid = char:FindFirstChild("Humanoid")
+    if not humanoid then return nil end
+    
+    -- Chercher RemoteFunction dans Humanoid
+    for _, child in pairs(humanoid:GetChildren()) do
+        if child:IsA("RemoteFunction") then
+            print("🔍 RemoteFunction trouvée dans Humanoid!")
+            return child
+        end
+    end
+    
+    return nil
+end
+
+local function autoCapturePortalRemote()
+    task.spawn(function()
+        local attempts = 0
+        
+        while not portalRemote and attempts < 50 do
+            attempts = attempts + 1
+            
+            local remote = findPortalRemote()
+            if remote then
+                portalRemote = remote
+                print("✅ Remote Portal AUTO-CAPTURÉ!")
+                print("📍 Path:", remote:GetFullName())
+                return
+            end
+            
+            task.wait(0.2)
+        end
+        
+        if not portalRemote then
+            print("⚠️ Auto-capture échoué - Utilise X manuellement")
+        end
+    end)
 end
 
 -- ========== PANELS ==========
@@ -780,13 +823,11 @@ local isMinimized = false
 local savedPosition = menuFrame.Position
 local savedSize = menuFrame.Size
 
--- Variables drag
 local dragging = false
 local dragInput = nil
 local dragStart = nil
 local startPos = nil
 
--- FONCTION DRAG (marche 100%)
 local function updateDrag(input)
     if dragging then
         local delta = input.Position - dragStart
@@ -803,16 +844,13 @@ minimizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
     
     if isMinimized then
-        -- SAUVEGARDER
         savedPosition = menuFrame.Position
         savedSize = menuFrame.Size
         
-        -- DÉSACTIVER DRAG NATIF
         menuFrame.Draggable = false
         
-        -- ANIMATION → ROND
         menuFrame:TweenSizeAndPosition(
-            UDim2.new(0, 70, 0, 70),  -- ROND 70x70
+            UDim2.new(0, 70, 0, 70),
             UDim2.new(0, 20, 0, 20),
             Enum.EasingDirection.Out,
             Enum.EasingStyle.Quad,
@@ -820,12 +858,10 @@ minimizeBtn.MouseButton1Click:Connect(function()
             true
         )
         
-        -- CACHER CONTENU
         sidebar.Visible = false
         main.Visible = false
         minimizeBtn.Text = "+"
         
-        -- LOGO CENTRÉ
         logo.Visible = true
         logo.Size = UDim2.new(1, 0, 1, 0)
         logo.Position = UDim2.new(0, 0, 0, 0)
@@ -833,16 +869,13 @@ minimizeBtn.MouseButton1Click:Connect(function()
         logo.TextXAlignment = Enum.TextXAlignment.Center
         logo.TextYAlignment = Enum.TextYAlignment.Center
         
-        -- BOUTON + EN HAUT
         minimizeBtn.Position = UDim2.new(0.5, -12, 0, 2)
         minimizeBtn.Size = UDim2.new(0, 24, 0, 24)
         minimizeBtn.TextSize = 16
         
-        -- RENDRE ROND
         menuFrame:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(1, 0)
         
     else
-        -- RESTAURER
         menuFrame.Draggable = false
         
         menuFrame:TweenSizeAndPosition(
@@ -856,32 +889,26 @@ minimizeBtn.MouseButton1Click:Connect(function()
         
         task.wait(0.3)
         
-        -- RÉAFFICHER
         sidebar.Visible = true
         main.Visible = true
         minimizeBtn.Text = "−"
         
-        -- LOGO NORMAL
         logo.Size = UDim2.new(1, -40, 1, 0)
         logo.Position = UDim2.new(0, 16, 0, 0)
         logo.TextSize = isMobile and 24 or 20
         logo.TextXAlignment = Enum.TextXAlignment.Left
         logo.TextYAlignment = Enum.TextYAlignment.Center
         
-        -- BOUTON - NORMAL
         minimizeBtn.Position = UDim2.new(1, -35, 0, 10)
         minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
         minimizeBtn.TextSize = isMobile and 20 or 18
         
-        -- COINS NORMAUX
         menuFrame:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, 8)
         
-        -- RÉACTIVER DRAG NATIF
         menuFrame.Draggable = true
     end
 end)
 
--- DRAG MANUEL POUR LE ROND
 menuFrame.InputBegan:Connect(function(input)
     if isMinimized and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
         dragging = true
@@ -914,17 +941,16 @@ end
 
 Players.PlayerAdded:Connect(setupPlayer)
 
--- ========== FIX: RÉACTIVER APRÈS MORT ==========
+-- ========== FIX: RÉACTIVER APRÈS MORT (MODIFIÉ) ==========
 player.CharacterAdded:Connect(function(character)
     print("🔄 Respawn détecté!")
     
-    -- FORCER RECAPTURE DU REMOTE
     portalRemote = nil
-    print("🔄 Remote réinitialisé - Utilise X pour recapturer")
+    print("🔄 Remote réinitialisé - Recherche auto...")
     
-    -- Attendre que le character soit prêt
     character:WaitForChild("HumanoidRootPart", 10)
-    task.wait(2)
+    character:WaitForChild("Humanoid", 10)
+    task.wait(3)
     
     if autoXAfterSoruEnabled then
         if not hookInstalled then
@@ -932,13 +958,13 @@ player.CharacterAdded:Connect(function(character)
             installMasterHook()
         end
         
-        print("⚠️ IMPORTANT: Équipe Portal et utilise X une fois!")
+        print("🔍 Recherche du remote Portal...")
+        autoCapturePortalRemote()
     end
 end)
 
 print("========================================")
 print("✅ zen chargé!")
 print("🔥 SANS COOLDOWN - Spam illimité!")
-print("💾 Remote persiste après mort!")
-print("🔄 Auto-restart après respawn!")
+print("🤖 AUTO-CAPTURE après respawn!")
 print("========================================")
